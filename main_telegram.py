@@ -135,6 +135,7 @@ async def admin_panel(message: types.Message):
         await message.answer("❌ Доступ лише для адміна в особистих повідомленнях.")
 
 @dp.message(F.text == "🌅 Розклад на завтра")
+@dp.message(Command("tomorrow"))
 async def show_tomorrow_schedule(message: types.Message):
     data = get_cleaned_schedule(days_offset=1)
     if not data:
