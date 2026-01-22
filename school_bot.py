@@ -79,7 +79,7 @@ def get_cleaned_schedule(days_offset=0):
                     "id": m_id,
                     "code": m_code
                 })
-        schedule.sort(key=lambda x: x['time'].split('-')[0].strip())
+        schedule.sort(key=lambda x: x['time'].split('-')[0].strip().zfill(5))
         logger.info(f"Обробка завершена. Знайдено {len(schedule)} уроків.")
         return schedule
     except Exception as e:
