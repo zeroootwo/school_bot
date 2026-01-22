@@ -50,9 +50,9 @@ def main_menu(user_id, chat_type):
     builder = ReplyKeyboardBuilder()
     builder.button(text="🚀 Що зараз за урок?")
     builder.button(text="🌅 Розклад на завтра")
+    builder.button(text="📚 Розклад на сьогодні")
     if user_id == admin_id and chat_type == "private":
         builder.button(text="⚙️ Адмінка")
-    builder.button(text="🆘 Допомога")
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True, input_field_placeholder="Оберіть дію 👇")
 
@@ -91,6 +91,11 @@ async def cmd_start(message: types.Message):
         await message.answer(f"Вітаю, Командире {message.from_user.first_name}! 🫡✨", reply_markup=markup)
     else:
         await message.answer(f"Привіт, {message.from_user.first_name}! Я твій шкільний помічник.", reply_markup=markup)
+
+@dp.message(F.text == "📚 Розклад на сьогодні")
+@dp.message(Command("today"))
+async def show_today(message: types.Message):
+    await send_or_edit_schedule(message)
 
 @dp.message(F.text == "🚀 Що зараз за урок?")
 @dp.message(Command("now"))
