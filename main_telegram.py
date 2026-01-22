@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
-from apscheduler.schedulers.asyncio import AsyncIOScheduler # Добавь в импорты
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from school_bot import get_cleaned_schedule, current_lesson, get_week_type
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
@@ -129,7 +129,6 @@ async def toggle_lesson(callback: types.CallbackQuery):
         cancelled_lessons.add(lesson_name)
         status_text = f"❌ Урок *{lesson_name}* скасовано!"
     await callback.answer(status_text)
-    await bot.send_message(group_id, status_text, parse_mode="Markdown")
     await send_or_edit_schedule(callback.message, is_callback=True, is_admin_mode=True)
 
 @dp.message(F.text == "⚙️ Адмінка")
