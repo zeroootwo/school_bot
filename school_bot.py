@@ -2,6 +2,7 @@ import re
 import os
 import gspread
 import logging
+import pytz
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from oauth2client.service_account import ServiceAccountCredentials
@@ -12,7 +13,8 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 def current_lesson(schedule):
-    now = datetime.now()
+    kiev_tz = pytz.timezone('Europe/Kiev')
+    now = datetime.now(kiev_tz)
     current_time = now.strftime("%H:%M")
     days = ["Понеділок", "Вівторок", "Середа", "Четвер", "П'ятниця", "Субота", "Неділя"]
     today = days[now.weekday()]
@@ -24,7 +26,9 @@ def current_lesson(schedule):
     return None
 
 def get_week_type():
-    week_num = datetime.now().isocalendar()[1]
+    kiev_tz = pytz.timezone('Europe/Kiev')
+    now = datetime.now(kiev_tz)
+    week_num = now.isocalendar()[1]
     return "numerator" if week_num % 2 == 0 else "denominator"
 
 def get_cleaned_schedule(days_offset=0):
@@ -59,18 +63,23 @@ def get_cleaned_schedule(days_offset=0):
                 if not subject: continue
                 lesson_time = row[2].strip()
                 lesson_num = str(row[1]).strip()
-
                 if target_day == "ПОНЕДІЛОК" and lesson_num == "7":
                     lesson_time = "08:45-09:30"
                 zoom_info = row[6].strip() if len(row) > 6 else ""
                 clean_info = re.sub(r'\s+', ' ', zoom_info).strip()
                 parts = clean_info.split()
-                m_id, m_code = "Не вказано", "Не вказано"
-                if len(parts) >= 4:
-                    m_id = f"{parts[0]} {parts[1]} {parts[2]}"
-                    m_code = parts[3]
+                m_id = "Не вказано"
+                m_code = "Не вказано"
+                if len(parts) == 1:
+                    m_id = parts[0]
                 elif len(parts) == 2:
                     m_id, m_code = parts[0], parts[1]
+                elif len(parts) >= 3:
+                    if len(parts) == 3 and all(p.isdigit() for p in parts):
+                         m_id = " ".join(parts)
+                    else:
+                         m_code = parts[-1]
+                         m_id = " ".join(parts[:-1])
                 schedule.append({
                     "day": target_day.capitalize().replace("П’ятниця", "П'ятниця"),
                     "time": lesson_time,
@@ -84,6 +93,29 @@ def get_cleaned_schedule(days_offset=0):
         return schedule
     except Exception as e:
         logger.error(f"ПОМИЛКА при роботі з Google Таблицею: {e}")
+        return []
+
+def get_classroom_codes_dict():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("schoolbot.json", scope)
+        client = gspread.authorize(creds)
+        sheet_id = os.getenv("GOOGLE_SHEET_ID")
+        sheet = client.open_by_key(sheet_id).worksheet("Коди та посилання")
+        data = sheet.get_all_values()
+        result = []
+        for row in data:
+            if len(row) >= 2 and row[1] and row[1] not in ["Код Google Classroom", ""]:
+                subject_full = row[0].strip()
+                subject_short = subject_full.split('(')[0].strip()
+                result.append({
+                    "name": subject_short, 
+                    "code": row[1].strip()
+                })
+        result.sort(key=lambda x: x['name'])
+        return result
+    except Exception as e:
+        logger.error(f"Помилка отримання кодів: {e}")
         return []
 
 if __name__ == "__main__":

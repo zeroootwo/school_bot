@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from school_bot import get_cleaned_schedule, current_lesson, get_week_type
+from school_bot import get_cleaned_schedule, current_lesson, get_week_type, get_classroom_codes_dict
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ async def send_morning_schedule():
         today_name = ua_days.get(datetime.now().strftime('%A'), "Сьогодні")
         response = f"☀️ **Доброго ранку!**\n"
         response += f"📅 Сьогодні: **{today_name}**, {datetime.now().strftime('%d.%m')}\n"
-        response += f"📑 Тиждень: **{week_name}**\n\n"  # ВОТ ЭТА СТРОЧКА
+        response += f"📑 Тиждень: **{week_name}**\n\n"
         response += f"📚 Ваш розклад:\n"
         for i, lesson in enumerate(data):
             response += f"{i + 1}. {lesson['time']} — *{lesson['subject']}*\n"
@@ -47,12 +47,15 @@ async def send_morning_schedule():
         logger.error(f":( Помилка розсилки: {e}")
 
 def main_menu(user_id, chat_type):
+    if chat_type != "private":
+        return types.ReplyKeyboardRemove()
     builder = ReplyKeyboardBuilder()
     builder.button(text="🚀 Що зараз за урок?")
+    builder.button(text="🔑 Коди Classroom")
     builder.button(text="🌅 Розклад на завтра")
     builder.button(text="📚 Розклад на сьогодні")
-    if user_id == admin_id and chat_type == "private":
-        builder.button(text="⚙️ Адмінка")
+    if user_id == admin_id:
+        builder.button(text="⚙️ Адмінка")    
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True, input_field_placeholder="Оберіть дію 👇")
 
@@ -69,7 +72,10 @@ async def send_or_edit_schedule(message: types.Message, is_callback=False, is_ad
             await message.answer(text)
         return
     builder = InlineKeyboardBuilder()
-    response = f"📅 *Розклад на сьогодні ({today})*\n\n"
+    response = f"📅 *Розклад на сьогодні ({today})*\n"
+    week_type = get_week_type()
+    week_name = "Цей тиждень *чисельник*\n\n" if week_type == "numerator" else "Цей тиждень *знаменник*\n\n"
+    response +=week_name
     for i, lesson in enumerate(today_lessons):
         is_cancelled = lesson['subject'] in cancelled_lessons
         status = "❌ (СКАСОВАНО)" if is_cancelled else "✅"
@@ -145,15 +151,49 @@ async def show_tomorrow_schedule(message: types.Message):
     if not data:
         await message.answer("🌅 Завтра вихідний! Відпочивай. 😎")
         return
-    response = f"🌅 *Розклад на завтра ({data[0]['day']})*\n\n"
+    response = f"🌅 *Розклад на завтра ({data[0]['day']})*\n"
+    week_type = get_week_type()
+    week_name = "Цей тиждень *чисельник*\n\n" if week_type == "numerator" else "Цей тиждень *знаменник*\n\n"
+    response +=week_name
     for i, lesson in enumerate(data):
         response += f"{i + 1}. {lesson['time']} — *{lesson['subject']}*\n"
     await message.answer(response, parse_mode="Markdown")
 
+@dp.message(F.text == "🔑 Коди Classroom")
+async def show_classroom_menu(message: types.Message):
+    if message.chat.type != "private":
+        return
+    subjects = get_classroom_codes_dict()
+    if not subjects:
+        await message.answer("❌ Коди поки не заповнені в таблиці.")
+        return
+    builder = InlineKeyboardBuilder()
+    for index, item in enumerate(subjects):
+        builder.button(text=item["name"], callback_data=f"cls_{index}")
+    builder.adjust(2)
+    await message.answer("🚪 Оберіть предмет, щоб отримати код:", reply_markup=builder.as_markup())
+
+@dp.callback_query(F.data.startswith("cls_"))
+async def send_classroom_code(callback: types.CallbackQuery):
+    try:
+        idx = int(callback.data.split("_")[1])
+        subjects = get_classroom_codes_dict()
+        item = subjects[idx]
+        await callback.message.answer(
+            f"🏫 Предмет: **{item['name']}**\n"
+            f"🔑 Код Classroom: `{item['code']}`\n\n"
+            f"_(Натисніть на код, щоб скопіювати його)_",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        await callback.answer("⚠️ Помилка. Спробуйте ще раз.")
+    await callback.answer()
+
 async def main():
     logger.info("Бот починає роботу...")
-    scheduler = AsyncIOScheduler(timezone="Europe/Kiev")
-    scheduler.add_job(send_morning_schedule, "cron", day_of_week='mon-fri', hour=9, minute=20)
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(send_morning_schedule, "cron", day_of_week="mon", hour=8, minute=30, timezone="Europe/Kiev")
+    scheduler.add_job(send_morning_schedule, "cron", day_of_week="tue-fri", hour=9, minute=20, timezone="Europe/Kiev")
     scheduler.start()
     await dp.start_polling(bot)
 
