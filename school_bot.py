@@ -20,8 +20,11 @@ def current_lesson(schedule):
     today = days[now.weekday()]
     for lesson in schedule:
         if lesson["day"] == today:
-            start_str, end_str = lesson["time"].split("-")
-            if start_str.strip() <= current_time <= end_str.strip():
+            times = lesson["time"].split("-")
+            if len(times) != 2: continue
+            start_str = times[0].strip().zfill(5)
+            end_str = times[1].strip().zfill(5)
+            if start_str <= current_time <= end_str:
                 return lesson
     return None
 
